@@ -29,19 +29,64 @@ npm run dev
 
 Supa Lyria Party DJ uses **Supabase** for PostgreSQL data storage, Realtime synchronization between the crowd and the DJ booth, and high-speed audio file hosting.
 
-### 1.1 Create a Supabase Project
-1. Log into your [Supabase Dashboard](https://supabase.com/dashboard) and click **"New Project"**.
-2. Name your project (e.g. `supa-lyria-party-dj`), choose a database password, and select your preferred region.
+You can initialize and manage your Supabase database either **programmatically via the Supabase CLI** (recommended) or via the **Web Dashboard**.
 
-### 1.2 Initialize the Database & Storage
-You can run the provided migration SQL file in one click:
+---
 
-1. In your Supabase project dashboard, open the **SQL Editor** tab from the left sidebar.
-2. Click **"New query"**.
-3. Open [`supabase/migrations/20260930000000_init_party_dj.sql`](./supabase/migrations/20260930000000_init_party_dj.sql) in this repository and copy its entire contents.
-4. Paste the SQL into the Supabase SQL Editor and click **"Run"** (or press `Cmd/Ctrl + Enter`).
+### Option A: Programmatic Setup via Supabase CLI (Recommended)
 
-#### What this migration sets up automatically:
+The project includes the Supabase CLI pre-configured with `supabase/config.toml` and npm helper scripts.
+
+#### 1. Log in to Supabase CLI
+```bash
+npm run supabase:login
+# Or export SUPABASE_ACCESS_TOKEN=sbp_...
+```
+
+#### 2. Link Your Remote Project & Push Database Migrations
+Get your **Project Reference ID** from your Supabase Dashboard URL (`https://supabase.com/dashboard/project/<your-project-id>`):
+
+```bash
+# Link the project
+npx supabase link --project-ref <your-project-id>
+
+# Push the migration directly to your live database
+npm run supabase:push
+```
+This automatically executes [`supabase/migrations/20260930000000_init_party_dj.sql`](./supabase/migrations/20260930000000_init_party_dj.sql), creating the tables, RLS policies, indexes, Realtime replication, and the `tracks` storage bucket!
+
+#### 3. Automatically Generate TypeScript Types
+You can generate full TypeScript definitions directly from your live schema:
+```bash
+npx supabase gen types typescript --linked > src/types/database.ts
+```
+
+#### 4. (Optional) Run 100% Locally with Docker
+If you have Docker installed and prefer running Supabase on your own machine without creating a cloud project:
+```bash
+# Starts local Postgres, Storage, Auth, Realtime, and Studio
+npm run supabase:start
+
+# View local credentials (API URL, anon key, service_role key)
+npm run supabase:status
+
+# When finished:
+npm run supabase:stop
+```
+The local studio is accessible at `http://127.0.0.1:54323`.
+
+---
+
+### Option B: Web Dashboard SQL Editor (Manual 1-Click)
+
+If you prefer not using the CLI:
+
+1. Log into your [Supabase Dashboard](https://supabase.com/dashboard) and create a **New Project**.
+2. Open the **SQL Editor** tab from the left sidebar and click **"New query"**.
+3. Copy the entire contents of [`supabase/migrations/20260930000000_init_party_dj.sql`](./supabase/migrations/20260930000000_init_party_dj.sql).
+4. Paste the SQL into the editor and click **"Run"** (`Cmd/Ctrl + Enter`).
+
+#### What this migration sets up:
 - **`public.event_sessions`**: Tracks the active party room and the currently playing track pointer.
 - **`public.song_requests`**: Stores song prompts, shoutout greetings, DJ voice personas, queue positions, donation amounts, and audio URLs.
 - **Performance Indexes**: Multi-column indexes on `(session_id, status)` and queue order.
@@ -78,6 +123,16 @@ NEXT_PUBLIC_ENABLE_PAYMENTS=false
 ENABLE_PAYMENTS=false
 ```
 When set to `false`, the donation interface and Stripe sheets are completely hidden, submissions are 100% free, and requests skip payment capture.
+
+### 2.4 (Optional) Stripe CLI for Local Testing
+You can monitor authorization holds and captures programmatically with the [Stripe CLI](https://docs.stripe.com/stripe-cli):
+```bash
+# Login to Stripe account
+stripe login
+
+# Real-time event listener for payment intents and captures
+stripe listen --events payment_intent.amount_capturable_updated,payment_intent.succeeded
+```
 
 ---
 
