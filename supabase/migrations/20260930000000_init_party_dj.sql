@@ -51,6 +51,13 @@ create index if not exists idx_song_requests_queue_pos on public.song_requests(s
 create index if not exists idx_song_requests_user_id on public.song_requests(user_id);
 create index if not exists idx_song_requests_created_at on public.song_requests(created_at desc);
 
+-- Explicit table grants for Data API access (ensures compatibility whether or not "Automatically expose new tables" is checked)
+grant usage on schema public to anon, authenticated;
+grant select on public.event_sessions to anon, authenticated;
+grant select, insert on public.song_requests to anon, authenticated;
+grant all on public.event_sessions to service_role;
+grant all on public.song_requests to service_role;
+
 -- 4. Enable Row Level Security (RLS)
 alter table public.event_sessions enable row level security;
 alter table public.song_requests enable row level security;
