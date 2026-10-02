@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { dbGetActiveSession, dbInsertSongRequest } from '@/lib/supabase/admin';
-import { isPaymentsEnabled, createPaymentHold } from '@/lib/stripe/server';
+import { isPaymentsEnabled, verifyPaymentHold, createPaymentHold } from '@/lib/stripe/server';
 import { SongRequest, VoicePersonaId } from '@/types';
 
 export async function POST(req: Request) {
@@ -15,6 +15,7 @@ export async function POST(req: Request) {
       voicePersona = 'hype_mc',
       donationAmountCents = 0,
       userId = null,
+      paymentIntentId: clientPaymentIntentId = null,
     } = body;
 
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -30,16 +31,28 @@ export async function POST(req: Request) {
 
     let clientSecret: string | null = null;
     let paymentIntentId: string | null = null;
-
     const actualDonation = paymentsActive ? Math.max(0, parseInt(donationAmountCents, 10) || 0) : 0;
 
     if (paymentsActive && actualDonation > 0) {
-      const hold = await createPaymentHold(actualDonation, {
-        userName: userName || 'Guest',
-        prompt: prompt.slice(0, 200),
-      });
-      clientSecret = hold.clientSecret;
-      paymentIntentId = hold.paymentIntentId;
+      if (clientPaymentIntentId) {
+        // Verify that the pre-authorization hold is active
+        const isValid = await verifyPaymentHold(clientPaymentIntentId);
+        if (!isValid) {
+          return NextResponse.json(
+            { error: 'Payment authorization hold could not be verified' },
+            { status: 400 }
+          );
+        }
+        paymentIntentId = clientPaymentIntentId;
+      } else {
+        // Fallback: create hold if not already created
+        const hold = await createPaymentHold(actualDonation, {
+          userName: userName || 'Guest',
+          prompt: prompt.slice(0, 200),
+        });
+        paymentIntentId = hold.paymentIntentId;
+        clientSecret = hold.clientSecret;
+      }
     }
 
     const songReq: SongRequest = {

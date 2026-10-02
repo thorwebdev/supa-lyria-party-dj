@@ -106,3 +106,25 @@ export async function cancelPaymentHold(paymentIntentId: string): Promise<boolea
     return false;
   }
 }
+
+/**
+ * Verify that a pre-authorization hold is active and in 'requires_capture' state
+ */
+export async function verifyPaymentHold(paymentIntentId: string): Promise<boolean> {
+  if (!paymentIntentId) return false;
+  if (paymentIntentId.startsWith('pi_mock_')) {
+    return true;
+  }
+
+  const stripe = getStripe();
+  if (!stripe) return true;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    return paymentIntent.status === 'requires_capture' || paymentIntent.status === 'succeeded';
+  } catch (err) {
+    console.error(`Failed to verify PaymentIntent ${paymentIntentId}:`, err);
+    return false;
+  }
+}
+
