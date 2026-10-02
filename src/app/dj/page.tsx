@@ -25,6 +25,7 @@ import {
   Layers,
   Sparkles,
   Maximize2,
+  RotateCcw,
 } from 'lucide-react';
 import { SongRequest, EventSession, VOICE_PERSONAS } from '@/types';
 import { DJWebAudioEngine } from '@/lib/audio/web-audio-player';
@@ -54,6 +55,7 @@ export default function DJConsolePage() {
   const [previewTrackId, setPreviewTrackId] = useState<string | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const [visualizerMode, setVisualizerMode] = useState<'bars' | 'wave'>('bars');
+  const [queueTab, setQueueTab] = useState<'ready' | 'played'>('ready');
 
   const audioEngineRef = useRef<DJWebAudioEngine | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -330,6 +332,30 @@ export default function DJConsolePage() {
     }
   };
 
+  // Re-queue a previously played track back into the ready queue
+  const handleRequeue = async (track: SongRequest) => {
+    setActionLoadingId(track.id);
+    try {
+      const res = await fetch('/api/dj/requeue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-dj-pin': pin,
+        },
+        body: JSON.stringify({ trackId: track.id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(`Failed to re-queue: ${data.error}`);
+      }
+    } catch (err) {
+      console.error('Re-queue failed:', err);
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   // Volume controls
   const handleVolumeChange = (vol: number) => {
     setMasterVolume(vol);
@@ -398,6 +424,14 @@ export default function DJConsolePage() {
   const readyQueue = requests
     .filter((r) => r.status === 'ready')
     .sort((a, b) => (a.queue_position || 0) - (b.queue_position || 0));
+
+  const playedHistory = requests
+    .filter((r) => r.status === 'played')
+    .sort(
+      (a, b) =>
+        new Date(b.played_at || b.created_at).getTime() -
+        new Date(a.played_at || a.created_at).getTime()
+    );
 
   const totalDonationCents = requests
     .filter((r) => r.status !== 'declined' && r.status !== 'failed')
@@ -856,96 +890,206 @@ export default function DJConsolePage() {
               </div>
             </section>
 
-            {/* Column 2: Ready / Play Queue */}
+            {/* Column 2: Ready Queue / Played History */}
             <section className="cyber-card rounded-3xl p-5 border border-white/10 flex flex-col gap-4">
-              <div className="flex items-center justify-between pb-2 border-b border-white/5">
-                <div className="flex items-center gap-2">
-                  <Music className="w-4 h-4 text-teal-400" />
-                  <h3 className="font-bold font-mono text-white text-sm">
-                    UP NEXT / READY QUEUE
-                  </h3>
+              <div className="flex items-center justify-between pb-2 border-b border-white/5 gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/40 border border-white/10">
+                  <button
+                    onClick={() => setQueueTab('ready')}
+                    className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 transition ${
+                      queueTab === 'ready'
+                        ? 'bg-teal-400/20 text-[#00F5D4] border border-teal-400/40 shadow-[0_0_12px_rgba(0,245,212,0.25)]'
+                        : 'text-zinc-400 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <Music className="w-3.5 h-3.5 text-[#00F5D4]" />
+                    <span>UP NEXT ({readyQueue.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => setQueueTab('played')}
+                    className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold flex items-center gap-1.5 transition ${
+                      queueTab === 'played'
+                        ? 'bg-pink-500/20 text-[#FF007F] border border-pink-500/40 shadow-[0_0_12px_rgba(255,0,127,0.25)]'
+                        : 'text-zinc-400 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-[#FF007F]" />
+                    <span>PLAYED ({playedHistory.length})</span>
+                  </button>
                 </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-teal-400/15 text-teal-300 border border-teal-400/30">
-                  {readyQueue.length} READY
+
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border ${
+                    queueTab === 'ready'
+                      ? 'bg-teal-400/15 text-teal-300 border-teal-400/30'
+                      : 'bg-pink-500/15 text-pink-300 border-pink-500/30'
+                  }`}
+                >
+                  {queueTab === 'ready' ? `${readyQueue.length} READY` : `${playedHistory.length} PLAYED`}
                 </span>
               </div>
 
               <div className="flex flex-col gap-3 overflow-y-auto max-h-[500px] pr-1">
-                {readyQueue.length === 0 ? (
-                  <div className="p-8 text-center rounded-2xl bg-black/30 border border-dashed border-zinc-800 text-zinc-500 font-mono text-xs flex flex-col items-center gap-2">
-                    <Music className="w-8 h-8 text-zinc-700" />
-                    <span>QUEUE IS CURRENTLY EMPTY</span>
-                    <span className="text-[10px] text-zinc-600">
-                      Approved tracks will appear here ready to drop
-                    </span>
-                  </div>
-                ) : (
-                  readyQueue.map((track, idx) => (
-                    <div
-                      key={track.id}
-                      className="p-3.5 rounded-2xl bg-[#07090E]/90 border border-zinc-800/90 hover:border-teal-400/40 transition flex items-center justify-between gap-3"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-7 h-7 rounded-xl bg-zinc-800/90 border border-zinc-700 flex items-center justify-center font-mono font-bold text-xs text-teal-400 shrink-0">
-                          #{idx + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-bold text-white truncate">{track.prompt}</p>
-                          <p className="text-[10px] text-zinc-400 font-mono flex items-center gap-2 truncate">
-                            <span>by {track.user_name}</span>
-                            {track.greeting_text && (
-                              <span className="text-pink-400">• MC Greeting Ready</span>
-                            )}
-                          </p>
+                {queueTab === 'ready' ? (
+                  readyQueue.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl bg-black/30 border border-dashed border-zinc-800 text-zinc-500 font-mono text-xs flex flex-col items-center gap-2">
+                      <Music className="w-8 h-8 text-zinc-700" />
+                      <span>QUEUE IS CURRENTLY EMPTY</span>
+                      <span className="text-[10px] text-zinc-600">
+                        Approved tracks will appear here ready to drop
+                      </span>
+                    </div>
+                  ) : (
+                    readyQueue.map((track, idx) => (
+                      <div
+                        key={track.id}
+                        className="p-3.5 rounded-2xl bg-[#07090E]/90 border border-zinc-800/90 hover:border-teal-400/40 transition flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-7 h-7 rounded-xl bg-zinc-800/90 border border-zinc-700 flex items-center justify-center font-mono font-bold text-xs text-teal-400 shrink-0">
+                            #{idx + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{track.prompt}</p>
+                            <p className="text-[10px] text-zinc-400 font-mono flex items-center gap-2 truncate">
+                              <span>by {track.user_name}</span>
+                              {track.greeting_text && (
+                                <span className="text-pink-400">• MC Greeting Ready</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* DJ Preview Button */}
+                          <button
+                            onClick={() => togglePreview(track)}
+                            className={`p-2 rounded-xl border font-mono text-xs transition ${
+                              previewTrackId === track.id
+                                ? 'bg-teal-400 text-black border-teal-300 shadow-[0_0_12px_rgba(0,245,212,0.4)]'
+                                : 'bg-zinc-900 text-zinc-400 hover:text-white border-zinc-800'
+                            }`}
+                            title="Pre-cue in DJ Headphones"
+                          >
+                            <Headphones className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Move Up/Down buttons */}
+                          <button
+                            disabled={idx === 0}
+                            onClick={() => moveQueue(track.id, 'up')}
+                            className="p-1.5 text-zinc-400 hover:text-white disabled:opacity-20 transition"
+                            title="Move Up"
+                          >
+                            <ChevronUp className="w-4 h-4" />
+                          </button>
+                          <button
+                            disabled={idx === readyQueue.length - 1}
+                            onClick={() => moveQueue(track.id, 'down')}
+                            className="p-1.5 text-zinc-400 hover:text-white disabled:opacity-20 transition"
+                            title="Move Down"
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </button>
+
+                          {/* Instant Drop / Play Now */}
+                          <button
+                            onClick={() => {
+                              audioEngineRef.current?.unlock();
+                              playTrackOnMaster(track);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-teal-400/20 hover:bg-teal-400/30 border border-teal-400/40 text-teal-300 font-mono text-xs flex items-center gap-1.5 transition active:scale-95 shadow-[0_0_10px_rgba(0,245,212,0.15)]"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-teal-400" />
+                            <span>DROP</span>
+                          </button>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {/* DJ Preview Button */}
-                        <button
-                          onClick={() => togglePreview(track)}
-                          className={`p-2 rounded-xl border font-mono text-xs transition ${
-                            previewTrackId === track.id
-                              ? 'bg-teal-400 text-black border-teal-300 shadow-[0_0_12px_rgba(0,245,212,0.4)]'
-                              : 'bg-zinc-900 text-zinc-400 hover:text-white border-zinc-800'
-                          }`}
-                          title="Pre-cue in DJ Headphones"
-                        >
-                          <Headphones className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Move Up/Down buttons */}
-                        <button
-                          disabled={idx === 0}
-                          onClick={() => moveQueue(track.id, 'up')}
-                          className="p-1.5 text-zinc-400 hover:text-white disabled:opacity-20 transition"
-                          title="Move Up"
-                        >
-                          <ChevronUp className="w-4 h-4" />
-                        </button>
-                        <button
-                          disabled={idx === readyQueue.length - 1}
-                          onClick={() => moveQueue(track.id, 'down')}
-                          className="p-1.5 text-zinc-400 hover:text-white disabled:opacity-20 transition"
-                          title="Move Down"
-                        >
-                          <ChevronDown className="w-4 h-4" />
-                        </button>
-
-                        {/* Instant Drop / Play Now */}
-                        <button
-                          onClick={() => {
-                            audioEngineRef.current?.unlock();
-                            playTrackOnMaster(track);
-                          }}
-                          className="px-3 py-1.5 rounded-xl bg-teal-400/20 hover:bg-teal-400/30 border border-teal-400/40 text-teal-300 font-mono text-xs flex items-center gap-1.5 transition active:scale-95 shadow-[0_0_10px_rgba(0,245,212,0.15)]"
-                        >
-                          <Zap className="w-3.5 h-3.5 text-teal-400" />
-                          <span>DROP</span>
-                        </button>
-                      </div>
+                    ))
+                  )
+                ) : (
+                  playedHistory.length === 0 ? (
+                    <div className="p-8 text-center rounded-2xl bg-black/30 border border-dashed border-zinc-800 text-zinc-500 font-mono text-xs flex flex-col items-center gap-2">
+                      <RotateCcw className="w-8 h-8 text-zinc-700" />
+                      <span>NO TRACKS PLAYED YET</span>
+                      <span className="text-[10px] text-zinc-600">
+                        Tracks that finish playing will appear here ready to re-queue
+                      </span>
                     </div>
-                  ))
+                  ) : (
+                    playedHistory.map((track) => (
+                      <div
+                        key={track.id}
+                        className="p-3.5 rounded-2xl bg-[#07090E]/90 border border-zinc-800/90 hover:border-pink-500/40 transition flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-xl bg-pink-500/10 border border-pink-500/30 flex items-center justify-center font-mono font-bold text-xs text-[#FF007F] shrink-0">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{track.prompt}</p>
+                            <p className="text-[10px] text-zinc-400 font-mono flex items-center gap-2 truncate">
+                              <span>by {track.user_name}</span>
+                              {track.played_at && (
+                                <span className="text-zinc-500">
+                                  • {new Date(track.played_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {track.donation_amount_cents > 0 && (
+                                <span className="text-emerald-400 font-bold">
+                                  • +${(track.donation_amount_cents / 100).toFixed(2)}
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* DJ Preview Button */}
+                          <button
+                            onClick={() => togglePreview(track)}
+                            className={`p-2 rounded-xl border font-mono text-xs transition ${
+                              previewTrackId === track.id
+                                ? 'bg-teal-400 text-black border-teal-300 shadow-[0_0_12px_rgba(0,245,212,0.4)]'
+                                : 'bg-zinc-900 text-zinc-400 hover:text-white border-zinc-800'
+                            }`}
+                            title="Pre-cue in DJ Headphones"
+                          >
+                            <Headphones className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Re-Queue Button */}
+                          <button
+                            disabled={actionLoadingId === track.id}
+                            onClick={() => handleRequeue(track)}
+                            className="px-3 py-1.5 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/40 text-pink-300 font-mono text-xs flex items-center gap-1.5 transition active:scale-95 shadow-[0_0_12px_rgba(255,0,127,0.2)] disabled:opacity-50"
+                            title="Add back into Up Next Queue"
+                          >
+                            <RotateCcw
+                              className={`w-3.5 h-3.5 text-[#FF007F] ${
+                                actionLoadingId === track.id ? 'animate-spin' : ''
+                              }`}
+                            />
+                            <span>RE-QUEUE</span>
+                          </button>
+
+                          {/* Instant Drop Again */}
+                          <button
+                            onClick={() => {
+                              audioEngineRef.current?.unlock();
+                              playTrackOnMaster(track);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-teal-400/20 hover:bg-teal-400/30 border border-teal-400/40 text-teal-300 font-mono text-xs flex items-center gap-1 transition active:scale-95 shadow-[0_0_10px_rgba(0,245,212,0.15)]"
+                            title="Drop immediately on Master Deck"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-teal-400" />
+                            <span>DROP</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )
                 )}
               </div>
             </section>
