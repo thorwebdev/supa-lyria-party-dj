@@ -60,14 +60,14 @@ export const CyberVisualizer: React.FC<CyberVisualizerProps> = ({
           const x = i * barWidth;
           const y = height - barHeight;
 
-          // Gradient from Neon Cyan (#00F0FF) to Magenta (#FF007A) to Purple (#7000FF)
+          // Gradient from Neon Turquoise (#00F5D4) to Electric Teal (#00F0FF) to Neon Pink (#FF007F)
           const grad = ctx.createLinearGradient(0, height, 0, y);
-          grad.addColorStop(0, '#00F0FF');
-          grad.addColorStop(0.5, '#7000FF');
-          grad.addColorStop(1, '#FF007A');
+          grad.addColorStop(0, '#00F5D4');
+          grad.addColorStop(0.5, '#00F0FF');
+          grad.addColorStop(1, '#FF007F');
 
           ctx.fillStyle = grad;
-          ctx.shadowColor = '#00F0FF';
+          ctx.shadowColor = '#00F5D4';
           ctx.shadowBlur = isPlaying ? 12 : 2;
 
           // Rounded bar caps
@@ -78,7 +78,7 @@ export const CyberVisualizer: React.FC<CyberVisualizerProps> = ({
           // Highlight dot on top of bar
           if (isPlaying && percent > 0.4) {
             ctx.fillStyle = '#FFFFFF';
-            ctx.shadowColor = '#FF007A';
+            ctx.shadowColor = '#FF007F';
             ctx.shadowBlur = 10;
             ctx.fillRect(x + 2, y - 4, barWidth - 4, 2);
           }
@@ -87,8 +87,8 @@ export const CyberVisualizer: React.FC<CyberVisualizerProps> = ({
         // Waveform / Oscilloscope line
         ctx.beginPath();
         ctx.lineWidth = 3;
-        ctx.strokeStyle = '#00F0FF';
-        ctx.shadowColor = '#00F0FF';
+        ctx.strokeStyle = '#00F5D4';
+        ctx.shadowColor = '#FF007F';
         ctx.shadowBlur = 15;
 
         const sliceWidth = width / bufferLength;

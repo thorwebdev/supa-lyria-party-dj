@@ -12,12 +12,23 @@ export const isSupabaseConfigured = () => {
   );
 };
 
+let clientInstance: ReturnType<typeof createSupabaseClient> | null = null;
+
 export const createClient = () => {
+  if (typeof window !== 'undefined' && clientInstance) {
+    return clientInstance;
+  }
+
   if (!isSupabaseConfigured()) {
     // Return dummy client if not configured; API routes and hooks fall back gracefully
-    return createSupabaseClient('https://mock.supabase.co', 'mock-anon-key', {
+    const mockClient = createSupabaseClient('https://mock.supabase.co', 'mock-anon-key', {
       auth: { persistSession: false },
     });
+    if (typeof window !== 'undefined') clientInstance = mockClient;
+    return mockClient;
   }
-  return createSupabaseClient(supabaseUrl, supabaseAnonKey);
+
+  const client = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+  if (typeof window !== 'undefined') clientInstance = client;
+  return client;
 };

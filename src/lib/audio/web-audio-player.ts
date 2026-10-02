@@ -22,9 +22,26 @@ export class DJWebAudioEngine {
     // Initialized lazily on first user interaction to comply with browser autoplay policies
   }
 
-  private initContext() {
+  /**
+   * Synchronously initialize the AudioContext graph and resume suspended state.
+   * MUST be invoked directly in a user click/gesture handler for autoplay compliance.
+   */
+  public unlock(): void {
+    this.initContextSync();
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch((err) => {
+        console.warn('[AudioEngine] unlock resume error:', err);
+      });
+    }
+  }
+
+  private initContextSync(): void {
+    if (typeof window === 'undefined') return;
+
     if (!this.audioCtx) {
-      const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtxClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.audioCtx = new AudioCtxClass();
 
       this.analyser = this.audioCtx.createAnalyser();
@@ -37,7 +54,7 @@ export class DJWebAudioEngine {
       this.musicGain = this.audioCtx.createGain();
       this.greetingGain = this.audioCtx.createGain();
 
-      // Routing:
+      // Audio Graph Routing:
       // musicSource -> musicGain -> analyser -> masterGain -> destination
       // greetingSource -> greetingGain -> analyser -> masterGain -> destination
       this.musicGain.connect(this.analyser);
@@ -46,8 +63,10 @@ export class DJWebAudioEngine {
       this.masterGain.connect(this.audioCtx.destination);
     }
 
-    if (this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch((err) => {
+        console.warn('[AudioEngine] resume warning:', err);
+      });
     }
   }
 
@@ -62,7 +81,12 @@ export class DJWebAudioEngine {
   public setMasterVolume(volume: number) {
     this.currentVolume = Math.max(0, Math.min(1, volume));
     if (this.masterGain && this.audioCtx) {
-      this.masterGain.gain.setTargetAtTime(this.currentVolume, this.audioCtx.currentTime, 0.05);
+      try {
+        this.masterGain.gain.cancelScheduledValues(this.audioCtx.currentTime);
+        this.masterGain.gain.setValueAtTime(this.currentVolume, this.audioCtx.currentTime);
+      } catch {
+        this.masterGain.gain.value = this.currentVolume;
+      }
     }
   }
 
@@ -75,16 +99,26 @@ export class DJWebAudioEngine {
   }
 
   private async fetchAndDecode(url: string): Promise<AudioBuffer> {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to load audio from ${url}`);
-    const arrayBuffer = await res.arrayBuffer();
+    this.initContextSync();
     if (!this.audioCtx) throw new Error('AudioContext not ready');
-    return await this.audioCtx.decodeAudioData(arrayBuffer);
+
+    console.log(`[AudioEngine] Fetching audio from ${url.startsWith('data:') ? 'base64 data URI' : url.substring(0, 100)}...`);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to load audio from ${url} (HTTP ${res.status})`);
+    const arrayBuffer = await res.arrayBuffer();
+
+    return new Promise<AudioBuffer>((resolve, reject) => {
+      this.audioCtx!.decodeAudioData(
+        arrayBuffer,
+        (buffer) => resolve(buffer),
+        (err) => reject(err || new Error('Audio decode failure'))
+      );
+    });
   }
 
   /**
    * Chains greeting voiceover smoothly into the music drop:
-   * 1. Plays greeting voiceover
+   * 1. Plays greeting voiceover at full volume
    * 2. Starts music in background with volume ducked (15%)
    * 3. At greeting conclusion, ramps music to 100% on the beat drop!
    */
@@ -93,27 +127,43 @@ export class DJWebAudioEngine {
     greetingUrl?: string | null
   ): Promise<void> {
     this.stop();
-    this.initContext();
+    this.initContextSync();
 
-    if (!this.audioCtx || !this.musicGain || !this.greetingGain) return;
+    if (!this.audioCtx || !this.musicGain || !this.greetingGain) {
+      throw new Error('Audio engine not properly initialized');
+    }
 
     try {
-      console.log('Loading track audio assets...');
+      if (this.audioCtx.state === 'suspended') {
+        await this.audioCtx.resume();
+      }
+
+      console.log('[AudioEngine] Decoding track audio assets...');
       const [musicBuffer, greetingBuffer] = await Promise.all([
         this.fetchAndDecode(musicUrl),
-        greetingUrl ? this.fetchAndDecode(greetingUrl).catch(() => null) : Promise.resolve(null),
+        greetingUrl
+          ? this.fetchAndDecode(greetingUrl).catch((err) => {
+              console.warn('[AudioEngine] Failed to decode greeting, playing music directly:', err);
+              return null;
+            })
+          : Promise.resolve(null),
       ]);
+
+      if (this.audioCtx.state === 'suspended') {
+        await this.audioCtx.resume();
+      }
 
       const now = this.audioCtx.currentTime;
       this.isPlaying = true;
       if (this.onTrackStartedCallback) this.onTrackStartedCallback();
 
-      if (greetingBuffer) {
+      if (greetingBuffer && greetingBuffer.duration > 0.5) {
         // --- Chained Greeting -> Music Drop Sequence ---
         const greetingDuration = greetingBuffer.duration;
-        console.log(`Chaining greeting (${greetingDuration.toFixed(1)}s) into music track`);
+        console.log(
+          `[AudioEngine] Chaining greeting (${greetingDuration.toFixed(1)}s) into music track (${musicBuffer.duration.toFixed(1)}s)`
+        );
 
-        // Create sources
         const greetingSource = this.audioCtx.createBufferSource();
         greetingSource.buffer = greetingBuffer;
         greetingSource.connect(this.greetingGain);
@@ -125,44 +175,71 @@ export class DJWebAudioEngine {
         this.activeGreetingSource = greetingSource;
         this.activeMusicSource = musicSource;
 
+        // Cancel previous automation curves
+        this.greetingGain.gain.cancelScheduledValues(now);
+        this.musicGain.gain.cancelScheduledValues(now);
+
         // Greeting Gain: full volume
         this.greetingGain.gain.setValueAtTime(1.0, now);
 
-        // Music Gain: starts ducked at 0.12, ramps up dynamically right as speech ends
+        // Music Gain: starts ducked at 0.15, ramps up to 1.0 right as speech concludes
         const dropLeadTime = Math.min(1.0, greetingDuration * 0.4);
-        const dropPoint = now + greetingDuration - dropLeadTime;
+        const dropPoint = now + Math.max(0, greetingDuration - dropLeadTime);
 
-        this.musicGain.gain.setValueAtTime(0.12, now);
-        // Start ramping up just before greeting ends
-        this.musicGain.gain.setValueAtTime(0.12, dropPoint);
+        this.musicGain.gain.setValueAtTime(0.15, now);
+        this.musicGain.gain.setValueAtTime(0.15, dropPoint);
         this.musicGain.gain.linearRampToValueAtTime(1.0, now + greetingDuration + 0.2);
 
-        // Start greeting now
+        // Start greeting immediately
         greetingSource.start(now);
-        // Start music track slightly overlapping with ducked intro
+        // Start music track overlapping in background
         musicSource.start(now);
 
+        greetingSource.onended = () => {
+          if (this.activeGreetingSource === greetingSource) {
+            this.activeGreetingSource = null;
+            // Ensure music gain is fully restored
+            if (this.musicGain && this.audioCtx) {
+              try {
+                this.musicGain.gain.cancelScheduledValues(this.audioCtx.currentTime);
+                this.musicGain.gain.setValueAtTime(1.0, this.audioCtx.currentTime);
+              } catch {}
+            }
+          }
+        };
+
         musicSource.onended = () => {
-          this.isPlaying = false;
-          if (this.onEndedCallback) this.onEndedCallback();
+          // Only fire onEnded if this source is still the active one (not stopped manually)
+          if (this.activeMusicSource === musicSource) {
+            this.activeMusicSource = null;
+            this.isPlaying = false;
+            console.log('[AudioEngine] Master track playback completed naturally');
+            if (this.onEndedCallback) this.onEndedCallback();
+          }
         };
       } else {
         // --- Direct Music Playback ---
+        console.log(`[AudioEngine] Direct music playback (${musicBuffer.duration.toFixed(1)}s)`);
         const musicSource = this.audioCtx.createBufferSource();
         musicSource.buffer = musicBuffer;
         musicSource.connect(this.musicGain);
         this.activeMusicSource = musicSource;
 
+        this.musicGain.gain.cancelScheduledValues(now);
         this.musicGain.gain.setValueAtTime(1.0, now);
         musicSource.start(now);
 
         musicSource.onended = () => {
-          this.isPlaying = false;
-          if (this.onEndedCallback) this.onEndedCallback();
+          if (this.activeMusicSource === musicSource) {
+            this.activeMusicSource = null;
+            this.isPlaying = false;
+            console.log('[AudioEngine] Master track playback completed naturally');
+            if (this.onEndedCallback) this.onEndedCallback();
+          }
         };
       }
     } catch (err) {
-      console.error('Playback failed in DJ engine:', err);
+      console.error('[AudioEngine] Playback failed in DJ engine:', err);
       this.isPlaying = false;
       throw err;
     }
@@ -170,14 +247,15 @@ export class DJWebAudioEngine {
 
   public pause() {
     if (this.audioCtx && this.audioCtx.state === 'running') {
-      this.audioCtx.suspend();
+      this.audioCtx.suspend().catch((e) => console.warn('Pause error:', e));
       this.isPlaying = false;
     }
   }
 
   public resume() {
+    this.unlock();
     if (this.audioCtx && this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume();
+      this.audioCtx.resume().catch((e) => console.warn('Resume error:', e));
       this.isPlaying = true;
     }
   }
@@ -185,6 +263,7 @@ export class DJWebAudioEngine {
   public stop() {
     if (this.activeGreetingSource) {
       try {
+        this.activeGreetingSource.onended = null;
         this.activeGreetingSource.stop();
         this.activeGreetingSource.disconnect();
       } catch {}
@@ -193,6 +272,7 @@ export class DJWebAudioEngine {
 
     if (this.activeMusicSource) {
       try {
+        this.activeMusicSource.onended = null;
         this.activeMusicSource.stop();
         this.activeMusicSource.disconnect();
       } catch {}

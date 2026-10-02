@@ -1,32 +1,35 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0B0D13;
-  --foreground: #F3F4F6;
+  --background: #07090E;
+  --foreground: #F8FAFC;
+  --cyber-turquoise: #00F5D4;
+  --cyber-pink: #FF007F;
   --cyber-cyan: #00F0FF;
   --cyber-magenta: #FF007A;
-  --cyber-purple: #7000FF;
-  --cyber-amber: #FFB800;
-  --cyber-green: #39FF14;
+  --cyber-amber: #F59E0B;
+  --cyber-emerald: #10B981;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-outfit), sans-serif;
+  --font-sans: var(--font-outfit), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-mono), monospace;
   --font-display: var(--font-space), sans-serif;
 }
 
 body {
-  background-color: #0B0D13;
-  color: #F3F4F6;
+  background-color: #07090E;
+  color: #F8FAFC;
   font-family: var(--font-outfit), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   overflow-x: hidden;
   background-image: 
-    radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 85% 25%, rgba(255, 0, 122, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 50% 85%, rgba(112, 0, 255, 0.05) 0%, transparent 50%);
+    radial-gradient(circle at 12% 15%, rgba(0, 245, 212, 0.10) 0%, transparent 45%),
+    radial-gradient(circle at 88% 20%, rgba(255, 0, 127, 0.10) 0%, transparent 45%),
+    radial-gradient(circle at 50% 85%, rgba(0, 240, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: auto, auto, auto, 28px 28px;
   background-attachment: fixed;
 }
 
@@ -36,57 +39,144 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #07090E;
+  background: rgba(7, 9, 14, 0.9);
 }
 ::-webkit-scrollbar-thumb {
-  background: #1F2937;
-  border-radius: 3px;
+  background: #1B2230;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #00F0FF;
+  background: #00F5D4;
+  box-shadow: 0 0 12px rgba(0, 245, 212, 0.6);
 }
 
-/* Glowing Neon Utilities */
-.neon-glow-cyan {
-  box-shadow: 0 0 20px rgba(0, 240, 255, 0.35);
+/* High-Tech Cyber Glass Panels */
+.cyber-card {
+  background: rgba(12, 16, 25, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7), inset 0 1px 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-.neon-glow-magenta {
-  box-shadow: 0 0 20px rgba(255, 0, 122, 0.35);
+.cyber-card-glow,
+.cyber-card-turquoise {
+  background: linear-gradient(180deg, rgba(14, 24, 32, 0.9) 0%, rgba(9, 15, 22, 0.95) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(0, 245, 212, 0.35);
+  box-shadow: 0 0 35px rgba(0, 245, 212, 0.15), inset 0 1px 1px 0 rgba(0, 245, 212, 0.3);
 }
 
-.neon-border-cyan {
-  border-color: rgba(0, 240, 255, 0.4);
+.cyber-card-pink {
+  background: linear-gradient(180deg, rgba(28, 14, 25, 0.9) 0%, rgba(15, 9, 16, 0.95) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 0, 127, 0.35);
+  box-shadow: 0 0 35px rgba(255, 0, 127, 0.15), inset 0 1px 1px 0 rgba(255, 0, 127, 0.3);
 }
 
-.neon-text-cyan {
-  color: #00F0FF;
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+/* Neon Glows & Highlights */
+.glow-turquoise {
+  box-shadow: 0 0 25px rgba(0, 245, 212, 0.4);
 }
 
-.neon-text-magenta {
-  color: #FF007A;
-  text-shadow: 0 0 10px rgba(255, 0, 122, 0.6);
+.glow-pink {
+  box-shadow: 0 0 25px rgba(255, 0, 127, 0.4);
 }
 
-.cyber-panel {
-  background: rgba(15, 18, 26, 0.75);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.glow-emerald {
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.35);
 }
 
-.cyber-panel-glow {
-  background: rgba(15, 18, 26, 0.85);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  box-shadow: 0 0 30px rgba(0, 240, 255, 0.12);
+.glow-amber {
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.35);
 }
 
-@keyframes pulseGlow {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.02); }
+.neon-text-turquoise {
+  color: #00F5D4;
+  text-shadow: 0 0 14px rgba(0, 245, 212, 0.7);
 }
 
-.animate-pulse-glow {
-  animation: pulseGlow 3s ease-in-out infinite;
+.neon-text-pink {
+  color: #FF007F;
+  text-shadow: 0 0 14px rgba(255, 0, 127, 0.7);
+}
+
+/* Corner HUD styling */
+.hud-corners-turquoise {
+  position: relative;
+}
+.hud-corners-turquoise::before,
+.hud-corners-turquoise::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+}
+.hud-corners-turquoise::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid #00F5D4;
+  border-left: 2px solid #00F5D4;
+}
+.hud-corners-turquoise::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid #00F5D4;
+  border-right: 2px solid #00F5D4;
+}
+
+.hud-corners-pink {
+  position: relative;
+}
+.hud-corners-pink::before,
+.hud-corners-pink::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+}
+.hud-corners-pink::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid #FF007F;
+  border-left: 2px solid #FF007F;
+}
+.hud-corners-pink::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid #FF007F;
+  border-right: 2px solid #FF007F;
+}
+
+/* Ambient Pulse Animation */
+@keyframes cyberPulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+.animate-cyber-pulse {
+  animation: cyberPulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Smooth Interactive Elements */
+input, textarea, select {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+button:active:not(:disabled) {
+  transform: scale(0.98);
 }
