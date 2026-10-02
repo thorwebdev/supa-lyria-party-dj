@@ -28,6 +28,7 @@ import {
   VoicePersonaId,
 } from '@/types';
 import { CyberVisualizer } from '@/components/CyberVisualizer';
+import { PaymentHoldModal } from '@/components/PaymentHoldModal';
 
 import { createClient } from '@/lib/supabase/client';
 
@@ -51,6 +52,7 @@ export default function AudiencePage() {
   const [donationCents, setDonationCents] = useState(200);
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'request' | 'my-requests'>('request');
 
   // Track user's own submitted IDs in localStorage
@@ -181,11 +183,8 @@ export default function AudiencePage() {
     }
   };
 
-  // Submit request
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim() || !greetingText.trim()) return;
-
+  // Core submission logic (called directly for free or after payment hold is authorized)
+  const executeSubmission = async (paymentIntentId: string | null = null) => {
     setIsSubmitting(true);
 
     try {
@@ -203,6 +202,7 @@ export default function AudiencePage() {
           greetingText: greetingText.trim(),
           voicePersona,
           donationAmountCents: paymentsEnabled ? donationCents : 0,
+          paymentIntentId,
         }),
       });
 
@@ -223,15 +223,16 @@ export default function AudiencePage() {
         setMyRequestIds(updatedIds);
         localStorage.setItem('party_dj_my_requests', JSON.stringify(updatedIds));
 
-        // Reset form
+        // Reset form & state
         setPrompt('');
         setGreetingText('');
         setSelectedGenres([]);
+        setIsPaymentModalOpen(false);
         setActiveTab('my-requests');
         fetchSession();
       } else {
         const data = await res.json();
-        alert(`Submission error: ${data.error}`);
+        alert(`Submission error: ${data.error || 'Failed to submit'}`);
       }
     } catch (err) {
       console.error('Submission failed:', err);
@@ -239,6 +240,21 @@ export default function AudiencePage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Submit request handler
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prompt.trim() || !greetingText.trim()) return;
+
+    // If payments are active and user chose a donation > 0, open payment authorization hold modal
+    if (paymentsEnabled && donationCents > 0) {
+      setIsPaymentModalOpen(true);
+      return;
+    }
+
+    // Free submission bypasses payment modal
+    await executeSubmission(null);
   };
 
   // Filter requests for "My Requests"
@@ -680,6 +696,18 @@ export default function AudiencePage() {
           )}
         </div>
       )}
+
+      {/* Stripe Payment Pre-Authorization Hold Modal */}
+      <PaymentHoldModal
+        isOpen={isPaymentModalOpen}
+        amountCents={donationCents}
+        userName={userName.trim() || 'Anonymous Raver'}
+        prompt={prompt.trim()}
+        onSuccess={async (paymentIntentId) => {
+          await executeSubmission(paymentIntentId);
+        }}
+        onClose={() => setIsPaymentModalOpen(false)}
+      />
     </div>
   );
 }
